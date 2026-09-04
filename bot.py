@@ -335,7 +335,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update.effective_user.id):
         return
 
-    voice = update.message.voice
+    voice = update.message.voice or update.message.audio
     chat_id = update.effective_chat.id
 
     await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
@@ -491,7 +491,7 @@ def main():
     app.add_handler(CommandHandler("voice", cmd_voice))
 
     # Multimodal Listeners
-    app.add_handler(MessageHandler(filters.VOICE, handle_voice))
+    app.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, handle_voice))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
