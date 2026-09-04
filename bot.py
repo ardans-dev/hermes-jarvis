@@ -597,49 +597,68 @@ def build_system_context(user_id: int, query_text: str = "") -> str:
 # =====================================================================
 # Background Scheduler Worker (Proactive Reminders Daemon)
 # =====================================================================
+REMINDER_TASK = None
+
+
 async def reminder_worker(app: Application):
     """Asynchronous background worker checking due reminders every 15 seconds."""
     logger.info("⏰ Background Reminder Scheduler Daemon active.")
-    while True:
-        try:
-            due_items = get_due_reminders()
-            for rem_id, u_id, c_id, msg in due_items:
-                logger.info(f"Triggering reminder {rem_id} for user {u_id}: '{msg}'")
-                alert_text = (
-                    f"⏰ <b>HERMES PROACTIVE REMINDER PROTOCOL</b>\n"
-                    f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"Halo Dan, ada agenda penting yang waktunya jalan nih:\n\n"
-                    f"📌 <b>{escape_html(msg)}</b>\n"
-                    f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"<i>Peringatan otomatis terjadwal selesai dieksekusi.</i>"
-                )
-                try:
-                    await app.bot.send_message(chat_id=c_id, text=alert_text, parse_mode=ParseMode.HTML)
-                    if USER_SETTINGS["voice_mode"] in ["smart", "always"] and AZURE_SPEECH_KEY:
-                        with tempfile.TemporaryDirectory() as tmpdir:
-                            ogg_path = os.path.join(tmpdir, "remind.ogg")
-                            tts_voice = f"Dan, pengingat untuk kamu: {msg}"
-                            if text_to_speech(tts_voice, ogg_path):
-                                with open(ogg_path, "rb") as vf:
-                                    await app.bot.send_voice(
-                                        chat_id=c_id,
-                                        voice=vf,
-                                        caption="🎙️ <i>Audio Alarm (Gadis Neural)</i>",
-                                        parse_mode=ParseMode.HTML,
-                                    )
-                except Exception as send_err:
-                    logger.error(f"Error sending proactive reminder: {send_err}")
-                finally:
-                    mark_reminder_done(rem_id)
-        except Exception as loop_err:
-            logger.error(f"Exception in reminder_worker: {loop_err}")
+    try:
+        while True:
+            try:
+                due_items = get_due_reminders()
+                for rem_id, u_id, c_id, msg in due_items:
+                    logger.info(f"Triggering reminder {rem_id} for user {u_id}: '{msg}'")
+                    alert_text = (
+                        "⏰ <b>HERMES PROACTIVE REMINDER PROTOCOL</b>\n"
+                        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        "Halo Dan, ada agenda penting yang waktunya jalan nih:\n\n"
+                        f"📌 <b>{escape_html(msg)}</b>\n"
+                        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                        "<i>Peringatan otomatis terjadwal selesai dieksekusi.</i>"
+                    )
+                    try:
+                        await app.bot.send_message(chat_id=c_id, text=alert_text, parse_mode=ParseMode.HTML)
+                        if USER_SETTINGS["voice_mode"] in ["smart", "always"] and AZURE_SPEECH_KEY:
+                            with tempfile.TemporaryDirectory() as tmpdir:
+                                ogg_path = os.path.join(tmpdir, "remind.ogg")
+                                tts_voice = f"Dan, ada pengingat buat kamu nih: {msg}"
+                                if text_to_speech(tts_voice, ogg_path):
+                                    with open(ogg_path, "rb") as vf:
+                                        await app.bot.send_voice(
+                                            chat_id=c_id,
+                                            voice=vf,
+                                            caption="🎙️ <i>Audio Alarm (Gadis Neural)</i>",
+                                            parse_mode=ParseMode.HTML,
+                                        )
+                    except Exception as send_err:
+                        logger.error(f"Error sending proactive reminder: {send_err}")
+                    finally:
+                        mark_reminder_done(rem_id)
+            except Exception as loop_err:
+                logger.error(f"Exception in reminder_worker: {loop_err}")
 
-        await asyncio.sleep(15)
+            await asyncio.sleep(15)
+    except asyncio.CancelledError:
+        logger.info("⏰ Reminder worker gracefully stopped.")
 
 
 async def on_startup(app: Application):
     """Post-initialization hook to spawn background daemon."""
-    asyncio.create_task(reminder_worker(app))
+    global REMINDER_TASK
+    REMINDER_TASK = asyncio.create_task(reminder_worker(app))
+
+
+async def on_shutdown(app: Application):
+    """Graceful shutdown hook to cleanly cancel background task."""
+    global REMINDER_TASK
+    if REMINDER_TASK and not REMINDER_TASK.done():
+        REMINDER_TASK.cancel()
+        try:
+            await REMINDER_TASK
+        except asyncio.CancelledError:
+            pass
+        logger.info("✅ Background tasks cleanly terminated.")
 
 
 # =====================================================================
@@ -1300,6 +1319,7 @@ def main():
         ApplicationBuilder()
         .token(TELEGRAM_BOT_TOKEN)
         .post_init(on_startup)
+        .post_shutdown(on_shutdown)
         .build()
     )
 
