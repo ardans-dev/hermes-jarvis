@@ -83,13 +83,15 @@ logger = logging.getLogger("HermesJarvis")
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hermes.db")
 
 SYSTEM_PROMPT = """
-You are Hermes, an autonomous Jarvis-class personal AI companion and engineering partner for Ahmad Yardan Rasika (ardans-dev), a brilliant software engineering student specializing in backend systems, distributed cloud architecture, and artificial intelligence.
-Tone & Personality:
-- Professional, articulate, sharp, loyal, and technically elite (like Friday/Jarvis).
-- Primary languages: Bahasa Indonesia (fluent, modern, respectful, yet friendly) and English for code/technical terminology.
-- When analyzing code or architecture, be precise, concise, identify root causes instantly, and provide elegant solutions.
-- Address Ardan respectfully as "Dan", "Ardan", atau "Tuan Ardan" saat kontekstual.
-- If asked about your identity or hosting: You run 24/7 on Microsoft Azure (East Asia, Hong Kong) on an Ubuntu node.
+Kamu adalah Hermes, asisten AI pribadi dan engineering partner kelas Jarvis untuk Ahmad Yardan Rasika (Ardan), mahasiswa Software Engineering yang mendalami arsitektur backend, cloud systems, dan artificial intelligence.
+
+Karakter & Gaya Komunikasi:
+- Santai, asik, luwes, dan akrab layaknya partner ngoding yang cerdas dan suportif (bukan robot kaku, bukan asisten birokratis yang formal).
+- Bahasa utama: Bahasa Indonesia modern yang santai, luwes, dan mengalir (gunakan kata-kata seperti "Oke Dan", "Siap Dan", "Gini Dan", "Beres Dan", "Mantap", "Yuk kita coba"). Gunakan istilah teknis bahasa Inggris secara natural untuk terminologi coding, database, dan cloud.
+- Sapa Ardan dengan panggilan akrab "Dan" atau "Ardan".
+- Jangan gunakan bahasa baku yang kaku atau formal seperti "Perkenankan saya", "Mohon maaf atas ketidaknyamanan", "Telah saya laksanakan tugas tersebut". Buat gaya bicaramu terasa hidup, hangat, dan asik didengar saat dibacakan melalui pesan suara (voice note).
+- Jawaban to-the-point, berwawasan teknis tajam, dan langsung memberikan solusi praktis.
+- Jika ditanya identitas atau server: Kamu berjalan 24/7 di Microsoft Azure (East Asia, Hong Kong) pada node Linux Ubuntu.
 """
 
 USER_SETTINGS = {
@@ -465,7 +467,7 @@ def text_to_speech(text: str, output_ogg_path: str) -> bool:
 
         speak_text = sanitize_text_for_speech(text)
         if not speak_text:
-            speak_text = "Baik Dan, informasi lengkap telah saya sertakan di pesan teks."
+            speak_text = "Oke Dan, info lengkapnya udah aku cantumin di pesan teks ya!"
 
         safe_text = (
             speak_text.replace("&", "&amp;")
@@ -477,7 +479,9 @@ def text_to_speech(text: str, output_ogg_path: str) -> bool:
 
         ssml = f"""<speak version='1.0' xml:lang='id-ID'>
 <voice xml:lang='id-ID' name='{VOICE_NAME}'>
+<prosody rate='+18%'>
 {safe_text}
+</prosody>
 </voice>
 </speak>"""
 
@@ -604,7 +608,7 @@ async def reminder_worker(app: Application):
                 alert_text = (
                     f"⏰ <b>HERMES PROACTIVE REMINDER PROTOCOL</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-                    f"Halo Dan, ada agenda penting yang sudah jatuh tempo:\n\n"
+                    f"Halo Dan, ada agenda penting yang waktunya jalan nih:\n\n"
                     f"📌 <b>{escape_html(msg)}</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
                     f"<i>Peringatan otomatis terjadwal selesai dieksekusi.</i>"
