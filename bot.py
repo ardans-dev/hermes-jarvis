@@ -304,6 +304,16 @@ def is_authorized(user_id: int) -> bool:
     return authorized
 
 
+
+async def reply_safe_html(message, text: str):
+    """Reply with HTML; fallback to plain text if Telegram rejects tags."""
+    try:
+        await message.reply_text(text, parse_mode=ParseMode.HTML)
+    except Exception as e:
+        logger.warning(f"HTML reply error: {e}. Falling back to plain text.")
+        clean_text = re.sub(r"<[^>]+>", "", text)
+        await message.reply_text(clean_text)
+
 def escape_html(text: str) -> str:
     if not text:
         return ""
@@ -806,7 +816,7 @@ async def cmd_memory(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    lines = [f"• <b>[#{f[0]}]</b> {escape_html(f[1])} <span class='text-xs'>({f[2][:10]})</span>" for f in facts]
+    lines = [f"• <b>[#{f[0]}]</b> {escape_html(f[1])} <i>({f[2][:10]})</i>" for f in facts]
     reply = (
         "🧠 <b>BERKAS MEMORI KOGNITIF HERMES</b>\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -814,7 +824,7 @@ async def cmd_memory(update: Update, context: ContextTypes.DEFAULT_TYPE):
         + "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "<i>Gunakan <code>/forget [id]</code> untuk menghapus memori tertentu.</i>"
     )
-    await update.message.reply_text(reply, parse_mode=ParseMode.HTML)
+    await reply_safe_html(update.message, reply)
 
 
 async def cmd_forget(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -904,7 +914,7 @@ async def cmd_reminders(update: Update, context: ContextTypes.DEFAULT_TYPE):
         + "\n".join(lines)
         + "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     )
-    await update.message.reply_text(reply, parse_mode=ParseMode.HTML)
+    await reply_safe_html(update.message, reply)
 
 
 async def cmd_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1053,7 +1063,7 @@ async def cmd_exec(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{status_emoji} <b>Bash Output (Exit Code: {res.returncode}):</b>\n"
             f"<pre><code>{escape_html(output)}</code></pre>"
         )
-        await update.message.reply_text(reply, parse_mode=ParseMode.HTML)
+        await reply_safe_html(update.message, reply)
     except subprocess.TimeoutExpired:
         await update.message.reply_text("⏱️ Perintah dihentikan karena melebihi batas waktu (timeout 25 detik).")
     except Exception as e:
@@ -1091,7 +1101,7 @@ async def cmd_whoami(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"• <b>Status Akses:</b> {'👑 Verified Owner (Root Access)' if is_owner else ('🟢 Unrestricted' if OWNER_TELEGRAM_ID is None else '🔒 Standard User')}\n\n"
         f"<i>Gunakan <code>/claim</code> untuk mengunci bot ke ID ini.</i>"
     )
-    await update.message.reply_text(reply, parse_mode=ParseMode.HTML)
+    await reply_safe_html(update.message, reply)
 
 
 # =====================================================================
