@@ -1,14 +1,23 @@
-# ⚡ Hermes Jarvis — Multimodal AI Assistant on Microsoft Azure
+# ⚡ Hermes Jarvis — Multimodal Autonomous AI Assistant
 
 <div align="center">
 
-  ![Azure](https://img.shields.io/badge/Hosted_on-Microsoft_Azure_East_Asia-0078D4?style=for-the-badge&logo=microsoftazure&logoColor=white)
-  ![Telegram](https://img.shields.io/badge/Interface-Telegram_Bot-26A5E4?style=for-the-badge&logo=telegram&logoColor=white)
-  ![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=for-the-badge&logo=python&logoColor=white)
-  ![Status](https://img.shields.io/badge/Daemon_Status-PM2_Online_24/7-22C55E?style=for-the-badge&logo=pm2&logoColor=white)
+  <a href="https://t.me/ardans_ai_bot" target="_blank">
+    <img src="https://img.shields.io/badge/Telegram_Bot-@ardans__ai__bot-26A5E4?style=for-the-badge&logo=telegram&logoColor=white" alt="Telegram Bot" />
+  </a>
+  <a href="https://gentle-river-0f3a40500.3.azurestaticapps.net" target="_blank">
+    <img src="https://img.shields.io/badge/Hosted_on-Microsoft_Azure_East_Asia-0078D4?style=for-the-badge&logo=microsoftazure&logoColor=white" alt="Azure" />
+  </a>
+  <img src="https://img.shields.io/badge/Neural_Voice-id--ID--GadisNeural-8B5CF6?style=for-the-badge&logo=azuredevops&logoColor=white" alt="Neural Voice" />
+  <img src="https://img.shields.io/badge/Daemon_Status-PM2_Online_24/7-22C55E?style=for-the-badge&logo=pm2&logoColor=white" alt="Status" />
 
   <p align="center">
-    <b>An autonomous, multimodal Jarvis-class AI companion engineered for high resilience, neural speech synthesis, and real-time computer vision.</b>
+    <b>An autonomous, multimodal Jarvis-class personal AI companion running 24/7 on Microsoft Azure Cloud.<br />
+    Engineered with natural Voice-to-Voice neural speech, real-time computer vision, and live system telemetry.</b>
+  </p>
+
+  <p align="center">
+    👉 <b><a href="https://t.me/ardans_ai_bot">Chat with Hermes Jarvis on Telegram (@ardans_ai_bot)</a></b> 👈
   </p>
 
 </div>
@@ -17,84 +26,105 @@
 
 ## 🌌 Overview
 
-**Hermes Jarvis** is an AI agent running 24/7 on an Azure Linux VM (`Standard_B2ats_v2`, East Asia). It elevates standard chat interactions into a seamless **Voice-to-Voice** and **Vision-enabled** engineering assistant.
+**Hermes Jarvis** is an autonomous AI assistant deployed 24/7 on an Azure Linux VM (`Standard_B2ats_v2`, East Asia, Hong Kong). It transforms everyday mobile communication into a full-fledged Iron Man-style engineering companion for **Ahmad Yardan Rasika ([@ardans-dev](https://github.com/ardans-dev))**.
 
 ### 🧬 Core Capabilities
 
-1. 🎙️ **Voice-to-Voice (Speech Recognition & Neural TTS)**:
-   - Powered by **Azure AI Speech Services (Free F0)**.
-   - Transcribes incoming Telegram Voice Notes (`.oga` / Opus) with high precision in Bahasa Indonesia and English.
-   - Generates articulate, natural Indonesian speech using **`id-ID-GadisNeural`**.
-   - Sends replies as native playable Telegram Voice Notes with audio waveform.
+1. 🎙️ **Voice-to-Voice (Azure Speech REST API)**:
+   - **Speech-to-Text (STT)**: Listens to incoming Telegram Voice Notes and audio attachments in Bahasa Indonesia & English with automated FFmpeg conversion (16kHz PCM).
+   - **Text-to-Speech (TTS)**: Synthesizes crystal-clear, expressive Indonesian speech using **Azure Neural Voice `id-ID-GadisNeural`**.
+   - **Smart Voice Mode**: Intelligently responds with a Voice Note when spoken to, and text when typed to.
 
 2. 👁️ **Computer Vision & Multimodal Reasoning**:
-   - Analyzes code on monitor screens, terminal stack traces, system architecture diagrams, and handwritten notes.
-   - Powered by OpenRouter multimodal LLMs (`google/gemini-2.0-flash-exp:free`).
+   - Takes photos and screenshots of code errors, terminal stack traces, server architectures, and lecture slides.
+   - Identifies bug root causes instantly and proposes precise refactoring and bugfixes.
 
-3. 📡 **Live Infrastructure Telemetry**:
-   - Command `/status` monitors CPU usage, physical RAM, swap partition, disk storage, and node uptime in real-time.
+3. 📡 **Live Cloud Telemetry (`/status`)**:
+   - Non-blocking real-time hardware diagnostics directly from the Azure VM: CPU load %, RAM/Swap allocation, disk usage, and node uptime.
 
-4. 🛡️ **Whitelisted Security**:
-   - Cryptographically checks Telegram User IDs to prevent unauthorized compute usage.
+4. 🌐 **Portfolio & Contact Relay**:
+   - Integrated with Ardan's official portfolio: [`gentle-river-0f3a40500.3.azurestaticapps.net`](https://gentle-river-0f3a40500.3.azurestaticapps.net/).
 
 ---
 
-## 🚀 Quick Deployment (Azure VM)
+## ⌨️ Telegram Command Reference
+
+| Command | Action |
+| :--- | :--- |
+| `/status` | 📡 Inspect live CPU, RAM, Disk, and node uptime on Azure VM (`vm-hermes`) |
+| `/voice smart` | 🎙️ Smart Mode: Reply with voice notes only when spoken to (Recommended) |
+| `/voice on` | 🔊 Always Mode: Reply with both voice note and text for every prompt |
+| `/voice off` | 🔇 Silent Mode: Reply exclusively with formatted text |
+| `/start` | ⚡ Initialize conversation and view capabilities overview |
+| `/help` | 📖 Display full command manual and operational guide |
+
+---
+
+## 🏛️ System Architecture
+
+```
+User (Telegram @ardans_ai_bot)
+      │
+      ├─► [Voice Note (.oga)] ──► FFmpeg (16kHz WAV) ──► Azure Speech STT (id-ID) ──┐
+      ├─► [Screenshot / Photo] ─► Base64 Data URL ─────► Multimodal Vision Engine ──┤
+      └─► [Text Query] ────────────────────────────────► OpenRouter Free Gateway ───┤
+                                                                                    │
+                                                                                    ▼
+                                                                        ┌───────────────────────┐
+                                                                        │   Hermes Jarvis Core  │
+                                                                        │   (Azure VM 24/7 PM2) │
+                                                                        └───────────┬───────────┘
+                                                                                    │
+               ┌────────────────────────────────────────────────────────────────────┴──────────┐
+               ▼                                                                               ▼
+     [TTS Synthesis Engine]                                                          [Solution Output]
+      • Filter Code Blocks & URLs                                                     • Clean Markdown
+      • Azure Neural Voice (Gadis)                                                    • Terminal Code Snippets
+      • FFmpeg (Opus Waveform OGG)                                                    • Diagnostic RCA
+               │                                                                               │
+               └────────────────────────────────┬──────────────────────────────────────────────┘
+                                                ▼
+                              User receives Voice Note + Formatted Reply!
+```
+
+---
+
+## 🚀 Quick Deployment Guide
 
 ```bash
-# 1. Clone the repository
+# 1. Clone repository
 git clone https://github.com/ardans-dev/hermes-jarvis.git
 cd hermes-jarvis
 
-# 2. Configure Environment Variables
-cp .env.example .env
-nano .env
+# 2. Configure Environment (.env)
+cat << 'EOF' > .env
+TELEGRAM_BOT_TOKEN="your_bot_token"
+OPENROUTER_API_KEY="your_openrouter_key"
+OPENROUTER_MODEL="openrouter/free"
+AZURE_SPEECH_KEY="your_azure_speech_key"
+AZURE_SPEECH_REGION="eastasia"
+VOICE_NAME="id-ID-GadisNeural"
+EOF
 
-# 3. Run Automated Installer
+# 3. Launch automated installer & PM2 daemon
 chmod +x setup.sh
 ./setup.sh
 ```
 
 ---
 
-## ⌨️ Command Reference
+## 🛡️ Tech Stack & Infrastructure
 
-| Command | Description |
-| :--- | :--- |
-| `/start` | Displays system status and multimodal feature guide. |
-| `/status` | Real-time telemetry report for the Azure VM node. |
-| `/voice [smart\|on\|off]` | Configures speech response behavior. |
-| `/help` | Detailed command documentation. |
-
----
-
-## 🏛️ Architecture
-
-```
-User (Telegram) ──[ Voice Note / Photo / Text ]──> Telegram Bot API
-                                                         │
-                                                         ▼
-                                                Azure VM (vm-hermes)
-                                              ┌───────────────────────┐
-                                              │   Hermes Jarvis Bot   │
-                                              │   (PM2 Daemon 24/7)   │
-                                              └──────────┬────────────┘
-                                                         │
-                      ┌──────────────────────────────────┴──────────────────────────────────┐
-                      ▼                                                                     ▼
-     [ Voice Note Processing ]                                              [ Vision / Text Reasoning ]
-      • FFmpeg Audio Conversion                                              • Base64 Image Packaging
-      • Azure Speech STT (id-ID)                                             • OpenRouter Multimodal LLM
-      • Azure Neural TTS (Gadis)                                             • Architectural Analysis
-                      │                                                                     │
-                      └──────────────────────────────────┬──────────────────────────────────┘
-                                                         │
-                                                         ▼
-User (Telegram) <──────[ Voice Waveform + Formatted Solution Text ]──────
-```
+- **Cloud Compute**: Microsoft Azure VM (`Standard_B2ats_v2`, AMD EPYC, 2 vCPUs, Ubuntu 24.04 LTS)
+- **Neural Speech**: Microsoft Azure Cognitive Services (Speech Tier F0, East Asia)
+- **Voice Model**: `id-ID-GadisNeural`
+- **LLM Gateway**: OpenRouter API (`openrouter/free`, `google/gemma-2-9b-it:free`, `meta-llama/llama-3.3-70b-instruct:free`)
+- **Process Supervisor**: PM2 Daemon
+- **Audio Processing**: FFmpeg (libopus, PCM s16le)
+- **Zero-Cost Engineering**: $0.00 / month (100% free under Azure for Students & OpenRouter Free Tier)
 
 ---
 
 <div align="center">
-  <sub>Engineered with precision by <a href="https://github.com/ardans-dev">Ahmad Yardan Rasika (ardans-dev)</a>. Hosted on Microsoft Azure.</sub>
+  <sub>Engineered with passion by <a href="https://github.com/ardans-dev">Ahmad Yardan Rasika (ardans-dev)</a>. Powered by Microsoft Azure.</sub>
 </div>
