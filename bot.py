@@ -4,11 +4,13 @@ Hermes Jarvis - Multimodal Autonomous AI Assistant for Telegram
 Platform: Microsoft Azure (East Asia)
 
 Features:
-- Free OpenRouter Model (openrouter/free, openrouter/auto)
-- Azure Neural Voice TTS (id-ID-GadisNeural) via REST API (100% cloud resilient)
-- Azure Speech STT (id-ID) via REST API (100% headless server compatible)
+- Robust environment variable parsing with automatic quote stripping
+- Automatic model fallback and repair
+- Azure Neural Voice TTS (id-ID-GadisNeural) via direct REST API
+- Azure Speech STT (id-ID) via direct REST API
 - Multimodal Vision Engine (Photos, Code, Diagrams)
-- Live Telemetry (/status)
+- Non-blocking Live Telemetry (/status)
+- Full error handling and verbose logging
 """
 
 import os
@@ -37,17 +39,34 @@ from telegram.ext import (
 import requests
 import psutil
 
-# Load Environment Variables
+# Load Environment Variables from .env
 load_dotenv()
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "").strip()
-OWNER_TELEGRAM_ID = os.getenv("OWNER_TELEGRAM_ID", "").strip()
-AZURE_SPEECH_KEY = os.getenv("AZURE_SPEECH_KEY", "").strip()
-AZURE_SPEECH_REGION = os.getenv("AZURE_SPEECH_REGION", "eastasia").strip()
-VOICE_NAME = os.getenv("VOICE_NAME", "id-ID-GadisNeural").strip()
-# Use free model router
-OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free").strip()
+
+def clean_env(val, default: str = "") -> str:
+    if val is None:
+        return default
+    cleaned = str(val).strip().strip("'\"").strip()
+    return cleaned if cleaned else default
+
+
+TELEGRAM_BOT_TOKEN = clean_env(os.getenv("TELEGRAM_BOT_TOKEN"))
+OPENROUTER_API_KEY = clean_env(os.getenv("OPENROUTER_API_KEY"))
+
+raw_owner = clean_env(os.getenv("OWNER_TELEGRAM_ID"))
+try:
+    OWNER_TELEGRAM_ID = int(raw_owner) if raw_owner else None
+except ValueError:
+    OWNER_TELEGRAM_ID = None
+
+AZURE_SPEECH_KEY = clean_env(os.getenv("AZURE_SPEECH_KEY"))
+AZURE_SPEECH_REGION = clean_env(os.getenv("AZURE_SPEECH_REGION"), "eastasia")
+VOICE_NAME = clean_env(os.getenv("VOICE_NAME"), "id-ID-GadisNeural")
+OPENROUTER_MODEL = clean_env(os.getenv("OPENROUTER_MODEL"), "openrouter/free")
+
+# Auto-migrate dead model names
+if OPENROUTER_MODEL in ["google/gemini-2.0-flash-exp:free", "openrouter/auto", ""]:
+    OPENROUTER_MODEL = "openrouter/free"
 
 logging.basicConfig(
     format="%(asctime)s - [%(levelname)s] - %(name)s - %(message)s",
@@ -71,9 +90,12 @@ USER_SETTINGS = {
 
 
 def is_authorized(user_id: int) -> bool:
-    if not OWNER_TELEGRAM_ID:
+    if OWNER_TELEGRAM_ID is None:
         return True
-    return str(user_id).strip() == str(OWNER_TELEGRAM_ID).strip()
+    authorized = (user_id == OWNER_TELEGRAM_ID)
+    if not authorized:
+        logger.warning(f"Unauthorized user {user_id} rejected (owner lock is {OWNER_TELEGRAM_ID})")
+    return authorized
 
 
 def sanitize_text_for_speech(text: str) -> str:
@@ -103,12 +125,11 @@ def convert_audio_to_wav(input_path: str, output_path: str) -> bool:
         res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         return res.returncode == 0
     except Exception as e:
-        logger.error(f"FFmpeg error: {e}")
+        logger.error(f"FFmpeg conversion error: {e}")
         return False
 
 
 def speech_to_text(audio_wav_path: str) -> str:
-    """Transcribe speech via Azure Speech REST API."""
     if not AZURE_SPEECH_KEY:
         logger.warning("AZURE_SPEECH_KEY not set.")
         return ""
@@ -124,14 +145,13 @@ def speech_to_text(audio_wav_path: str) -> str:
         with open(audio_wav_path, "rb") as f:
             audio_data = f.read()
 
+        logger.info(f"Sending audio ({len(audio_data)} bytes) to Azure STT REST API...")
         res = requests.post(url, headers=headers, data=audio_data, timeout=25)
         if res.status_code == 200:
             data = res.json()
-            if data.get("RecognitionStatus") == "Success":
-                return data.get("DisplayText", "")
-            else:
-                logger.info(f"STT status: {data.get('RecognitionStatus')}")
-                return ""
+            display_text = data.get("DisplayText", "")
+            logger.info(f"Azure STT recognized: '{display_text}'")
+            return display_text
         else:
             logger.error(f"STT REST API error {res.status_code}: {res.text}")
             return ""
@@ -141,7 +161,6 @@ def speech_to_text(audio_wav_path: str) -> str:
 
 
 def text_to_speech(text: str, output_ogg_path: str) -> bool:
-    """Synthesize speech via Azure Speech REST API + FFmpeg to OGG Opus."""
     if not AZURE_SPEECH_KEY:
         return False
 
@@ -150,15 +169,14 @@ def text_to_speech(text: str, output_ogg_path: str) -> bool:
         headers = {
             "Ocp-Apim-Subscription-Key": AZURE_SPEECH_KEY,
             "Content-Type": "application/ssml+xml",
-            "X-Microsoft-OutputFormat": "audio-16khz-32kbitrate-mono-mp3",
-            "User-Agent": "HermesJarvis",
+            "X-Microsoft-OutputFormat": "audio-24khz-48kbitrate-mono-mp3",
+            "User-Agent": "HermesJarvisBot",
         }
 
         speak_text = sanitize_text_for_speech(text)
         if not speak_text:
-            speak_text = "Baik Dan, informasi lengkap telah saya tampilkan di pesan teks."
+            speak_text = "Baik Dan, informasi lengkap telah saya sertakan di pesan teks."
 
-        # Escape XML characters
         safe_text = (
             speak_text.replace("&", "&amp;")
             .replace("<", "&lt;")
@@ -173,13 +191,13 @@ def text_to_speech(text: str, output_ogg_path: str) -> bool:
 </voice>
 </speak>"""
 
-        res = requests.post(url, headers=headers, data=ssml.encode("utf-8"), timeout=25)
+        logger.info(f"Generating TTS audio for {len(speak_text)} chars via Azure REST API...")
+        res = requests.post(url, headers=headers, data=ssml.encode("utf-8"), timeout=30)
         if res.status_code == 200:
-            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp_mp3:
-                tmp_mp3.write(res.content)
-                mp3_path = tmp_mp3.name
+            mp3_path = output_ogg_path + ".mp3"
+            with open(mp3_path, "wb") as f:
+                f.write(res.content)
 
-            # Convert to OGG Opus for native Telegram voice bubble
             cmd = [
                 "ffmpeg",
                 "-y",
@@ -194,7 +212,9 @@ def text_to_speech(text: str, output_ogg_path: str) -> bool:
             subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             if os.path.exists(mp3_path):
                 os.remove(mp3_path)
-            return os.path.exists(output_ogg_path) and os.path.getsize(output_ogg_path) > 0
+            success = os.path.exists(output_ogg_path) and os.path.getsize(output_ogg_path) > 0
+            logger.info(f"TTS audio conversion: {'Success' if success else 'Failed'}")
+            return success
         else:
             logger.error(f"TTS REST API error {res.status_code}: {res.text}")
             return False
@@ -204,7 +224,9 @@ def text_to_speech(text: str, output_ogg_path: str) -> bool:
 
 
 def call_openrouter(messages: list) -> str:
-    """Query OpenRouter with automatic fallback on free models."""
+    if not OPENROUTER_API_KEY:
+        return "⚠️ OPENROUTER_API_KEY belum dikonfigurasi di server."
+
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
@@ -212,9 +234,12 @@ def call_openrouter(messages: list) -> str:
         "X-Title": "Hermes-Jarvis-Telegram",
     }
 
-    # List of models to try in order (always free)
-    candidate_models = [OPENROUTER_MODEL, "openrouter/free", "openrouter/auto"]
-    # De-duplicate while preserving order
+    candidate_models = [
+        OPENROUTER_MODEL,
+        "openrouter/free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "google/gemma-2-9b-it:free",
+    ]
     models_to_try = []
     for m in candidate_models:
         if m and m not in models_to_try:
@@ -229,6 +254,7 @@ def call_openrouter(messages: list) -> str:
         }
 
         try:
+            logger.info(f"Calling OpenRouter model: {model_name}...")
             res = requests.post(
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers=headers,
@@ -241,8 +267,9 @@ def call_openrouter(messages: list) -> str:
                     msg = data["choices"][0]["message"]
                     content = msg.get("content") or msg.get("reasoning")
                     if content:
+                        logger.info(f"Received response from {model_name} ({len(content)} chars)")
                         return content.strip()
-            logger.warning(f"Model {model_name} failed with status {res.status_code}: {res.text[:150]}")
+            logger.warning(f"Model {model_name} returned {res.status_code}: {res.text[:150]}")
         except Exception as e:
             logger.error(f"Error querying {model_name}: {e}")
 
@@ -251,12 +278,15 @@ def call_openrouter(messages: list) -> str:
 
 # Handlers
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update.effective_user.id):
+    user = update.effective_user
+    logger.info(f"Incoming /start from user {user.id} ({user.first_name})")
+
+    if not is_authorized(user.id):
         await update.message.reply_text("⛔ Access Denied.")
         return
 
     welcome = (
-        "⚡ <b>HERMES JARVIS ONLINE [v3.1.0-Azure]</b>\n"
+        "⚡ <b>HERMES JARVIS ONLINE [v3.3.0-Azure]</b>\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "Halo Dan! Sistem Jarvis pribadi kamu sudah aktif dan siap beroperasi.\n\n"
         "🎙️ <b>Kemampuan Suara (Voice-to-Voice):</b>\n"
@@ -273,10 +303,15 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update.effective_user.id):
+    user = update.effective_user
+    logger.info(f"Incoming /status request from user {user.id} ({user.first_name})")
+
+    if not is_authorized(user.id):
+        await update.message.reply_text("⛔ Access Denied.")
         return
 
-    cpu_pct = psutil.cpu_percent(interval=0.3)
+    # Non-blocking CPU reading
+    cpu_pct = psutil.cpu_percent(interval=None)
     mem = psutil.virtual_memory()
     swap = psutil.swap_memory()
     disk = psutil.disk_usage("/")
@@ -296,17 +331,26 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🧠 <b>RAM:</b> {mem.percent}% ({mem.used // (1024**2)}MB / {mem.total // (1024**2)}MB)\n"
         f"💾 <b>Swap:</b> {swap.percent}% ({swap.used // (1024**2)}MB / {swap.total // (1024**2)}MB)\n"
         f"📁 <b>Disk:</b> {disk.percent}% ({disk.used // (1024**3)}GB / {disk.total // (1024**3)}GB)\n"
-        f"🎙️ <b>Neural Speech Engine:</b> {'ONLINE' if AZURE_SPEECH_KEY else 'STANDBY'}\n"
+        f"🎙️ <b>Neural Speech Engine:</b> {'ONLINE (Gadis)' if AZURE_SPEECH_KEY else 'STANDBY'}\n"
         f"🔊 <b>Voice Mode:</b> {USER_SETTINGS['voice_mode'].upper()}\n"
         f"🤖 <b>AI Model:</b> {OPENROUTER_MODEL} (100% Free)\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "✅ <i>Semua sub-sistem beroperasi normal ($0).</i>"
     )
-    await update.message.reply_text(status, parse_mode=ParseMode.HTML)
+
+    try:
+        await update.message.reply_text(status, parse_mode=ParseMode.HTML)
+    except Exception as e:
+        logger.warning(f"Failed to send HTML status ({e}), sending plain text...")
+        clean_text = re.sub(r"<[^>]+>", "", status)
+        await update.message.reply_text(clean_text)
 
 
 async def cmd_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update.effective_user.id):
+    user = update.effective_user
+    logger.info(f"Incoming /voice from user {user.id}")
+
+    if not is_authorized(user.id):
         return
 
     args = context.args
@@ -331,7 +375,11 @@ async def cmd_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update.effective_user.id):
+    user = update.effective_user
+    logger.info(f"Incoming voice message from user {user.id} ({user.first_name})")
+
+    if not is_authorized(user.id):
+        await update.message.reply_text("⛔ Access Denied.")
         return
 
     voice = update.message.voice or update.message.audio
@@ -356,7 +404,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         transcription = speech_to_text(wav_path)
         if not transcription:
             await update.message.reply_text(
-                "🎙️ Maaf Dan, suara kurang terdengar jelas atau belum terdeteksi. Boleh coba kirim ulang ya!"
+                "🎙️ Maaf Dan, suara belum terdeteksi jelas. Boleh dicoba kirim ulang ya!"
             )
             return
 
@@ -396,7 +444,11 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update.effective_user.id):
+    user = update.effective_user
+    logger.info(f"Incoming photo from user {user.id} ({user.first_name})")
+
+    if not is_authorized(user.id):
+        await update.message.reply_text("⛔ Access Denied.")
         return
 
     chat_id = update.effective_chat.id
@@ -446,13 +498,15 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update.effective_user.id):
+    user = update.effective_user
+    user_text = update.message.text
+    logger.info(f"Incoming text: '{user_text}' from user {user.id} ({user.first_name})")
+
+    if not is_authorized(user.id):
         await update.message.reply_text("⛔ Access Denied.")
         return
 
     chat_id = update.effective_chat.id
-    user_text = update.message.text
-
     await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
 
     messages = [
@@ -472,13 +526,28 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(ai_response)
 
 
+async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.error("Exception while handling an update:", exc_info=context.error)
+    if isinstance(update, Update) and update.effective_message:
+        try:
+            await update.effective_message.reply_text(f"⚠️ Terjadi error internal: {context.error}")
+        except Exception:
+            pass
+
+
 def main():
     if not TELEGRAM_BOT_TOKEN:
         logger.error("TELEGRAM_BOT_TOKEN not found!")
         sys.exit(1)
 
-    logger.info("⚡ Initializing Hermes Jarvis Engine (v3.1.0)...")
+    logger.info("⚡ Initializing Hermes Jarvis Engine (v3.3.0)...")
+    logger.info(f"OpenRouter Model: {OPENROUTER_MODEL}")
+    logger.info(f"Azure Speech: Region={AZURE_SPEECH_REGION}, Voice={VOICE_NAME}")
+    logger.info(f"Owner Authorization: {'LOCKED to ' + str(OWNER_TELEGRAM_ID) if OWNER_TELEGRAM_ID else 'UNRESTRICTED (Open for Ardan)'}")
+
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+
+    app.add_error_handler(global_error_handler)
 
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("help", cmd_start))
@@ -490,7 +559,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
     logger.info("🚀 Hermes Jarvis Online. Polling Telegram updates...")
-    app.run_polling(drop_pending_updates=True)
+    app.run_polling(drop_pending_updates=False)
 
 
 if __name__ == "__main__":
